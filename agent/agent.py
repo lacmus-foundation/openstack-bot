@@ -66,7 +66,7 @@ def make_metrics_report(idle_start_time: datetime = _idle_start_time, config: Co
         print(str(e), flush=True)
 
 @app.get('/api/v1/metrics')
-async def get_metrics(idle_start_time: datetime = _idle_start_time, config: Config = config):
+async def get_metrics():
     '''
     Процедура берет следующие метрики и возвращает их.
 
@@ -76,8 +76,7 @@ async def get_metrics(idle_start_time: datetime = _idle_start_time, config: Conf
     cpu_usage: среднее исполнение cpu в %, (float)
     gpu_usage: среднее исполнение gpu в %, (float) 
     ram_usage: использование памяти в %, (float) 
-    idle_time: время простоя dd:hh:mm:ss:ms.ms, (str)
-                - Если использование ресурсов меньше трешхолда то время простоя растет, иначе обнуляется
+    is_idle: если использование ресурсов меньше трешхолда то True, иначе False
     up_time:   время работы dd:hh:mm:ss:ms.ms, (str)
     '''
     ip = metrics.get_ip()
@@ -87,11 +86,6 @@ async def get_metrics(idle_start_time: datetime = _idle_start_time, config: Conf
     gpu_usage = metrics.get_gpu_usage()
     ram_usage = metrics.get_ram_usage()
     up_time = metrics.get_up_time()
-    if metrics.is_idle(cpu_usage, gpu_usage, ram_usage, 5):
-        idle_time = datetime.now() - idle_start_time
-    else:
-        _idle_start_time = datetime.now()
-        idle_time = _idle_start_time - _idle_start_time
     report = {
         'ip': ip,
         'cpu_temp':  float(cpu_temp),
@@ -100,6 +94,6 @@ async def get_metrics(idle_start_time: datetime = _idle_start_time, config: Conf
         'gpu_usage': float(gpu_usage),
         'ram_usage': float(ram_usage),
         'up_time':   str(up_time),
-        'idle_time': str(idle_time)
+        'is_idle':   metrics.is_idle(cpu_usage, gpu_usage, ram_usage, 5)
     }
     return report
