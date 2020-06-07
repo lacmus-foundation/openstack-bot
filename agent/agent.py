@@ -67,7 +67,7 @@ def make_metrics_report(idle_start_time: datetime = _idle_start_time, config: Co
 
 @app.get('/api/v1/metrics')
 async def get_metrics():
-     '''
+    '''
     Процедура берет следующие метрики и возвращает их.
 
     ip:        внешний ip в сети, (string)
