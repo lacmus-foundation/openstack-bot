@@ -66,7 +66,7 @@ def make_metrics_report(idle_start_time: datetime = _idle_start_time, config: Co
         print(str(e), flush=True)
 
 @app.get('/api/v1/metrics')
-async def get_metrics():
+async def get_metrics(idle_start_time: datetime = _idle_start_time, config: Config = config):
     '''
     Процедура берет следующие метрики и возвращает их.
 
