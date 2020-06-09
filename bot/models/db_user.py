@@ -17,3 +17,6 @@ class User(Base):
     ram_usage = Column(Float)
     up_time = Column(Time)
     idle_time = Column(Time)
+    
+    class Config:
+        orm_mode = True
