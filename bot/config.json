@@ -1,0 +1,14 @@
+{
+    "standart": {
+        "flavor": "small.ai.1",
+        "image": "ubuntu20.04-ml",
+        "network": "network",
+        "description": "1x GPU 2080ti, 8x CPU, 16GB RAM, 50GB /home"
+    },
+    "big": {
+        "flavor": "big.ai.1",
+        "image": "ubuntu20.04-ml",
+        "network": "network",
+        "description": "2x GPU 2080ti, 16x CPU, 64GB RAM, 50GB /home"
+    }
+}
