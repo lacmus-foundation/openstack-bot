@@ -10,6 +10,7 @@ class User(Base):
     is_use_server = Column(Boolean, default=False)
     ssh_pub_key = Column(Unicode)
     serv_ip = Column(String)
+    serv_id = Column(String)
     cpu_usage = Column(Float)
     gpu_usage = Column(Float)
     cpu_temp = Column(Float)

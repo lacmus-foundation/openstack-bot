@@ -1,7 +1,8 @@
-slackclient
 uvicorn
 fastapi
 psycopg2-binary
 sqlalchemy
 python-multipart
 sshpubkeys
+python-openstackclient
+requests

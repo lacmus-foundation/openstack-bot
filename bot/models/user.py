@@ -7,6 +7,7 @@ class User(BaseModel):
     is_use_server: bool = False
     ssh_pub_key: str = None
     serv_ip: str = None
+    serv_id: str = None
     cpu_usage: float = None
     gpu_usage: float = None
     cpu_temp: float = None

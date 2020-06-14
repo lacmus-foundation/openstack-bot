@@ -1,8 +1,10 @@
-from fastapi import FastAPI, HTTPException, Request, Response, Depends
+from fastapi import FastAPI, HTTPException, Request, Response, Depends, BackgroundTasks
 from sqlalchemy.orm import Session
 from models.db import SessionLocal, engine
 from models import user, db_user
 from controllers import user_controller, openstack_controller
+from time import sleep
+import requests
 import json
 
 
@@ -26,6 +28,65 @@ async def is_request_valid(req: Request):
     except:
         is_token_valid = False
     return is_token_valid
+
+def server_status_report(server_id: str, respone_url: str, usr: user.User, db: Session = Depends(get_db)):
+    count = 0
+    while count < 120:
+        info = await openstack_controller.get_server_info(server_id=server_id)
+        if info['status'] == 'ACTIVE':
+            usr.serv_id = info['id']
+            usr.serv_ip = info['ip']
+            
+            rows = await user_controller.update_user_info(db=db, usr=usr)
+            if rows < 0:
+                data = { 
+                    'response_type': 'in_thread',
+                    'type': 'mrkdwn', 
+                    'text': f'Error: cant update info about \nuser id: *{usr.id}*\nname: *{usr.nick}*.' 
+                }
+                requests.post(response_url, json=data)
+                break
+
+            data = { 
+                'response_type': 'in_thread',
+                'type': 'mrkdwn', 
+                'text': f'''Setver is ready to use!
+Server id: *{info['id']}*
+Server ip: *{info['ip']}*
+Server status: *{info['status']}*
+
+Use command to connect:
+```
+$ ssh ubuntu@{info['ip']}
+```
+'''
+            }
+            requests.post(response_url, json=data)
+            break
+
+        if info['status'] == 'BUILD':
+            count = count + 1
+            sleep(1)
+            continue
+
+        data = { 
+                'response_type': 'in_thread',
+                'type': 'mrkdwn', 
+                'text': f'''Error: creating server error
+Server id: *{info['id']}*
+Server ip: *{info['ip']}*
+Server status: *{info['status']}*
+'''
+            }
+            requests.post(response_url, json=data)
+            break
+    data = { 
+                'response_type': 'in_thread',
+                'type': 'mrkdwn', 
+                'text': 'Error: creating server timeout.'
+            }
+            requests.post(response_url, json=data)
+            break
 
 @app.post('/api/v1/command/usage')
 async def usage_command(req: Request):
@@ -136,8 +197,18 @@ See `/usage` command for more info.
             }
 
     # todo: update or create openstack server
+    server_id = await openstack_controller.create_server(user=usr, 
+                                                flavor=server_params['flavor'], 
+                                                image=server_params['image'], 
+                                                network=server_params['network'])
+    if server_id == None:
+        return { 
+            'response_type': 'in_thread',
+            'type': 'mrkdwn', 
+            'text': f'Error: cant finish operation for user \nid: *{usr.id}*\nname: *{usr.nick}*\nopenstack eror.' 
+            }
+    usr.serv_id = server_id
     usr.is_use_server = True
-    usr.serv_ip = "1.1.1.1"
     rows = await user_controller.update_user_info(db=db, usr=usr)
     if rows < 0:
         return { 
@@ -145,19 +216,16 @@ See `/usage` command for more info.
             'type': 'mrkdwn', 
             'text': f'Error: cant update info about \nuser id: *{usr.id}*\nname: *{usr.nick}*.' 
             }
+    respone_url = r_from['response_url']
+    background_tasks.add_task(server_status_report, server_id, respone_url, usr)
 
     return { 
             'response_type': 'in_thread',
             'type': 'mrkdwn', 
             'text': 
-f'''Created server _{server_type}_ for user 
+f'''Start creating server _{server_type}_ for user 
 id: *{usr.id}*
 name: *{usr.nick}*.
-
-Use command to connect via ssh:
-```
-$ ssh ubuntu@{usr.serv_ip}
-```
 '''
             }
 
@@ -183,8 +251,16 @@ async def stop_server_command(req: Request, db: Session = Depends(get_db)):
             }
     
     # todo: update or stop and delete openstack server
+    if not await openstack_controller.delete_server(server_id=usr.serv_id):
+        return { 
+            'response_type': 'in_thread',
+            'type': 'mrkdwn', 
+            'text': f'Error: cant delete server \nserver id: *{usr.serv_id}*\nserver ip: *{usr.serv_ip}*.' 
+            }
+
     usr.is_use_server = False
     usr.serv_ip = None
+    usr.serv_id = None
     rows = await user_controller.update_user_info(db=db, usr=usr)
     if rows < 0:
         return { 
