@@ -136,9 +136,15 @@ async def set_ssh_command(req: Request, db: Session = Depends(get_db)):
         db_usr = await user_controller.create_user(db=db, usr=usr)
 
     # todo: update or create keypair in openstack
-
-    # update user key
     usr.ssh_pub_key = r_from['text']
+    if not await openstack_controller.create_keypair(usr=usr):
+        return { 
+            'response_type': 'in_thread',
+            'type': 'mrkdwn', 
+            'text': f'Error: cant create openstack keypair for user\nid: *{usr.id}*\nname: *{usr.nick}*.' 
+            }
+
+    # update user key]
     rows = await user_controller.update_user_info(db=db, usr=usr)
     if rows < 0:
         return { 
