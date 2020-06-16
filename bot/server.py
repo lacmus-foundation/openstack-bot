@@ -29,7 +29,7 @@ async def is_request_valid(req: Request):
         is_token_valid = False
     return is_token_valid
 
-def server_status_report(server_id: str, respone_url: str, usr: user.User, db: Session = Depends(get_db)):
+async def server_status_report(server_id: str, respone_url: str, usr: user.User, db: Session = Depends(get_db)):
     count = 0
     while count < 120:
         info = await openstack_controller.get_server_info(server_id=server_id)
@@ -78,15 +78,15 @@ Server ip: *{info['ip']}*
 Server status: *{info['status']}*
 '''
             }
-            requests.post(response_url, json=data)
-            break
+        requests.post(response_url, json=data)
+        break
+
     data = { 
                 'response_type': 'in_thread',
                 'type': 'mrkdwn', 
                 'text': 'Error: creating server timeout.'
             }
-            requests.post(response_url, json=data)
-            break
+    requests.post(response_url, json=data)
 
 @app.post('/api/v1/command/usage')
 async def usage_command(req: Request):
