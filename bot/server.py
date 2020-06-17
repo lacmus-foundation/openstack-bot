@@ -29,7 +29,7 @@ async def is_request_valid(req: Request):
         is_token_valid = False
     return is_token_valid
 
-async def create_server(server_id: str, server_params: dict, usr: user.User, r_from: dict, db: Session):
+async def create_server(server_params: dict, usr: user.User, r_from: dict, db: Session):
     response_url = r_from['response_url']
 
     server_id = await openstack_controller.create_server(usr=usr, 
@@ -296,7 +296,7 @@ See `/usage` command for more info.
             }
 
     # todo: update or create openstack server
-    background_tasks.add_task(create_server, server_id, server_params, usr, r_from, db)
+    background_tasks.add_task(create_server, server_params, usr, r_from, db)
     return { 
             'response_type': 'in_thread',
             'type': 'mrkdwn', 
