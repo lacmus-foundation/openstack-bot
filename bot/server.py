@@ -29,7 +29,7 @@ async def is_request_valid(req: Request):
         is_token_valid = False
     return is_token_valid
 
-async def create_server(server_id: str, server_params: dict, usr: user.User, r_from: dict, db: Session = Depends(get_db)):
+async def create_server(server_id: str, server_params: dict, usr: user.User, r_from: dict, db: Session):
     response_url = r_from['response_url']
 
     server_id = await openstack_controller.create_server(usr=usr, 
@@ -126,7 +126,7 @@ Server status: *{info['status']}*
             }
     requests.post(response_url, json=data)
 
-async def set_ssh_key(r_from: dict, usr: user.User, db: Session = Depends(get_db)):
+async def set_ssh_key(r_from: dict, usr: user.User, db: Session):
     # todo: update or create keypair in openstack
     usr.ssh_pub_key = r_from['text']
     if not await openstack_controller.create_keypair(usr=usr):
@@ -159,7 +159,7 @@ async def set_ssh_key(r_from: dict, usr: user.User, db: Session = Depends(get_db
             }
     requests.post(response_url, json=data)
 
-async def delete_server(r_from: dict, usr: user.User, db: Session = Depends(get_db)):
+async def delete_server(r_from: dict, usr: user.User, db: Session):
     # todo: update or stop and delete openstack server
     if not await openstack_controller.delete_server(server_id=usr.serv_id):
         response_url = r_from['response_url']
@@ -244,7 +244,7 @@ async def set_ssh_command(req: Request, background_tasks: BackgroundTasks, db: S
         )
         db_usr = await user_controller.create_user(db=db, usr=usr)
     
-    background_tasks.add_task(set_ssh_key, r_from=r_from, usr=usr)
+    background_tasks.add_task(set_ssh_key, r_from=r_from, usr=usr, db=db)
     return { 
             'response_type': 'in_thread',
             'type': 'mrkdwn', 
@@ -296,7 +296,7 @@ See `/usage` command for more info.
             }
 
     # todo: update or create openstack server
-    background_tasks.add_task(create_server, server_id, server_params, usr, r_from)
+    background_tasks.add_task(create_server, server_id, server_params, usr, r_from, db)
     return { 
             'response_type': 'in_thread',
             'type': 'mrkdwn', 
@@ -324,7 +324,7 @@ async def stop_server_command(req: Request, db: Session = Depends(get_db)):
             'text': f'''Error: user\nid: *{r_from["user_id"]}*,\nname: *{r_from["user_name"]}*\nhave no servers. Use `/create-server` command. \nSee `/usage` command for more info.'''
             }
     
-    background_tasks.add_task(delete_server, r_from=r_from, usr=usr)
+    background_tasks.add_task(delete_server, r_from=r_from, usr=usr, db=db)
     return { 
             'response_type': 'in_thread',
             'type': 'mrkdwn', 
