@@ -304,7 +304,7 @@ See `/usage` command for more info.
             }
 
 @app.post('/api/v1/command/stop-server')
-async def stop_server_command(req: Request, db: Session = Depends(get_db)):
+async def stop_server_command(req: Request, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     if not await is_request_valid(req):
         raise HTTPException(400, detail='invalid token')
     r_from = await req.form()
@@ -330,3 +330,7 @@ async def stop_server_command(req: Request, db: Session = Depends(get_db)):
             'type': 'mrkdwn', 
             'text': 'Start working:-)' 
             }
+
+@app.post('/api/v1/monitoring')
+async def stop_server_command():
+    return
