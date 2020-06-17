@@ -4,6 +4,7 @@ from models.db import SessionLocal, engine
 from models import user, db_user
 from controllers import user_controller, openstack_controller
 from time import sleep
+import config
 import requests
 import json
 
@@ -23,10 +24,18 @@ async def is_request_valid(req: Request):
     try:
         r_from = await req.form()
         print(r_from, flush=True)
-        is_token_valid = r_from['token'] == '7t5eol79LFxKNCQ9Eaa6Fqnt'
-        #os.environ['SLACK_VERIFICATION_TOKEN']
+        is_token_valid = r_from['token'] == config.token and r_from['channel_id'] == config.channel_id
     except:
         is_token_valid = False
+        response_url = r_from['response_url']
+        data = { 
+            'response_type': 'in_thread',
+            'type': 'mrkdwn', 
+            'text': f'''You must be a member of the Lacmus community (#proj_rescuer_la) in order to be able to receive GPUs for training.
+You can find and join our project in the #ml4sg channel or write to *@gosha20777* to get more info.
+Powered by https://immers.cloud''' 
+            }
+        requests.post(response_url, json=data)
     return is_token_valid
 
 async def create_server(server_params: dict, usr: user.User, r_from: dict, db: Session):
@@ -41,7 +50,7 @@ async def create_server(server_params: dict, usr: user.User, r_from: dict, db: S
         data = { 
             'response_type': 'in_thread',
             'type': 'mrkdwn', 
-            'text': f'Error: cant finish operation for user \nid: *{usr.id}*\nname: *{usr.nick}*\nopenstack eror.' 
+            'text': f'Error: can\'t finish operation for user \nid: *{usr.id}*\nname: *{usr.nick}*\nopenstack eror.' 
             }
         requests.post(response_url, json=data)
         return
@@ -197,7 +206,7 @@ async def delete_server(r_from: dict, usr: user.User, db: Session):
             'response_type': 'in_thread',
             'type': 'mrkdwn', 
             'text': 
-f'''Stop and delete server user 
+f'''Stop and delete server for user 
 id: *{usr.id}*
 name: *{usr.nick}*.
 '''
@@ -222,11 +231,12 @@ async def usage_command(req: Request):
 f'''
 *Bot usage:*
 - `/set-ssh-key [SSH_PUBLIC_KEY]` - _create or update keypair with your ssh key_
-- `/create-server [SERVER_TYPE]` - _create a new server for currnt user_
+- `/create-server [SERVER_TYPE]` - _create a new server for current user_
   - _*SERVER_TYPE:*_
-{server_types_msg}- `/stop-server` - _stop andlete server_
+{server_types_msg}- `/stop-server` - _stop and dlete server_
 
-_If you want de a different server configuration - write to administrators:_ *@gosha20777*, *@ei-grad*
+_If you want a different server configuration - write to administrators:_ *@gosha20777*, *@ei-grad*
+Powered by https://immers.cloud
 '''
         }
 
