@@ -29,7 +29,38 @@ async def is_request_valid(req: Request):
         is_token_valid = False
     return is_token_valid
 
-async def server_status_report(server_id: str, response_url: str, usr: user.User, db: Session = Depends(get_db)):
+async def create_server(server_id: str, server_params: dict, usr: user.User, r_from: dict, db: Session = Depends(get_db)):
+    response_url = r_from['response_url']
+
+    server_id = await openstack_controller.create_server(usr=usr, 
+                                                flavor=server_params['flavor'], 
+                                                image=server_params['image'], 
+                                                network=server_params['network'])
+    if server_id == None:
+        response_url = r_from['response_url']
+        data = { 
+            'response_type': 'in_thread',
+            'type': 'mrkdwn', 
+            'text': f'Error: cant finish operation for user \nid: *{usr.id}*\nname: *{usr.nick}*\nopenstack eror.' 
+            }
+        requests.post(response_url, json=data)
+        return
+
+    usr.serv_id = server_id
+    usr.is_use_server = True
+    rows = await user_controller.update_user_info(db=db, usr=usr)
+    if rows < 0:
+        response_url = r_from['response_url']
+        data = { 
+            'response_type': 'in_thread',
+            'type': 'mrkdwn', 
+            'text': f'Error: cant update info about \nuser id: *{usr.id}*\nname: *{usr.nick}*.' 
+            }
+        requests.post(response_url, json=data)
+        return
+
+    response_url = r_from['response_url']
+    
     count = 0
     data = {
             'response_type': 'in_thread',
@@ -86,7 +117,7 @@ Server status: *{info['status']}*
 '''
             }
         requests.post(response_url, json=data)
-        break
+        return
 
     data = { 
                 'response_type': 'in_thread',
@@ -94,6 +125,77 @@ Server status: *{info['status']}*
                 'text': 'Error: creating server timeout.'
             }
     requests.post(response_url, json=data)
+
+async def set_ssh_key(r_from: dict, usr: user.User, db: Session = Depends(get_db)):
+    # todo: update or create keypair in openstack
+    usr.ssh_pub_key = r_from['text']
+    if not await openstack_controller.create_keypair(usr=usr):
+        response_url = r_from['response_url']
+        data = { 
+            'response_type': 'in_thread',
+            'type': 'mrkdwn', 
+            'text': f'Error: cant create openstack keypair for user\nid: *{usr.id}*\nname: *{usr.nick}*.' 
+            }
+        requests.post(response_url, json=data)
+        return
+
+    # update user key
+    rows = await user_controller.update_user_info(db=db, usr=usr)
+    if rows < 0:
+        response_url = r_from['response_url']
+        data = { 
+            'response_type': 'in_thread',
+            'type': 'mrkdwn', 
+            'text': f'Error: cant update info about \nuser id: *{usr.id}*\nname: *{usr.nick}*.' 
+            }
+        requests.post(response_url, json=data)
+        return
+
+    response_url = r_from['response_url']
+    data = { 
+            'response_type': 'in_thread',
+            'type': 'mrkdwn', 
+            'text': f'Set ssh public key for \nuser id: *{usr.id}*\nname: *{usr.nick}*.\n\n`{usr.ssh_pub_key}`' 
+            }
+    requests.post(response_url, json=data)
+
+async def delete_server(r_from: dict, usr: user.User, db: Session = Depends(get_db)):
+    # todo: update or stop and delete openstack server
+    if not await openstack_controller.delete_server(server_id=usr.serv_id):
+        response_url = r_from['response_url']
+        data = { 
+            'response_type': 'in_thread',
+            'type': 'mrkdwn', 
+            'text': f'Error: cant delete server \nserver id: *{usr.serv_id}*\nserver ip: *{usr.serv_ip}*.' 
+            }
+        requests.post(response_url, json=data)
+
+    usr.is_use_server = False
+    usr.serv_ip = None
+    usr.serv_id = None
+    rows = await user_controller.update_user_info(db=db, usr=usr)
+    if rows < 0:
+        response_url = r_from['response_url']
+        data = { 
+            'response_type': 'in_thread',
+            'type': 'mrkdwn', 
+            'text': f'Error: cant update info about \nuser id: *{usr.id}*\nname: *{usr.nick}*.' 
+            }
+        requests.post(response_url, json=data)
+        return
+
+    response_url = r_from['response_url']
+    data = { 
+            'response_type': 'in_thread',
+            'type': 'mrkdwn', 
+            'text': 
+f'''Stop and delete server user 
+id: *{usr.id}*
+name: *{usr.nick}*.
+'''
+            }
+    requests.post(response_url, json=data)
+    return
 
 @app.post('/api/v1/command/usage')
 async def usage_command(req: Request):
@@ -121,7 +223,7 @@ _If you want de a different server configuration - write to administrators:_ *@g
         }
 
 @app.post('/api/v1/command/set-ssh')
-async def set_ssh_command(req: Request, db: Session = Depends(get_db)):
+async def set_ssh_command(req: Request, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     if not await is_request_valid(req):
         raise HTTPException(400, detail='invalid token')
     r_from = await req.form()
@@ -141,35 +243,14 @@ async def set_ssh_command(req: Request, db: Session = Depends(get_db)):
             nick=r_from['user_name']
         )
         db_usr = await user_controller.create_user(db=db, usr=usr)
-
-    # todo: update or create keypair in openstack
-    usr.ssh_pub_key = r_from['text']
-    if not await openstack_controller.create_keypair(usr=usr):
-        return { 
+    
+    background_tasks.add_task(set_ssh_key, r_from=r_from, usr=usr)
+    return { 
             'response_type': 'in_thread',
             'type': 'mrkdwn', 
-            'text': f'Error: cant create openstack keypair for user\nid: *{usr.id}*\nname: *{usr.nick}*.' 
+            'text': 'Start working:-)' 
             }
-
-    # update user key]
-    rows = await user_controller.update_user_info(db=db, usr=usr)
-    if rows < 0:
-        response_url = r_from['response_url']
-        data = { 
-            'response_type': 'in_thread',
-            'type': 'mrkdwn', 
-            'text': f'Error: cant update info about \nuser id: *{usr.id}*\nname: *{usr.nick}*.' 
-            }
-        requests.post(response_url, json=data)
-        return
-
-    response_url = r_from['response_url']
-    data = { 
-            'response_type': 'in_thread',
-            'type': 'mrkdwn', 
-            'text': f'Set ssh public key for \nuser id: *{usr.id}*\nname: *{usr.nick}*.\n\n`{usr.ssh_pub_key}`' 
-            }
-    requests.post(response_url, json=data)
+    
 
 @app.post('/api/v1/command/create-server')
 async def create_server_command(req: Request, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
@@ -215,35 +296,12 @@ See `/usage` command for more info.
             }
 
     # todo: update or create openstack server
-    server_id = await openstack_controller.create_server(usr=usr, 
-                                                flavor=server_params['flavor'], 
-                                                image=server_params['image'], 
-                                                network=server_params['network'])
-    if server_id == None:
-        response_url = r_from['response_url']
-        data = { 
+    background_tasks.add_task(create_server, server_id, server_params, usr, r_from)
+    return { 
             'response_type': 'in_thread',
             'type': 'mrkdwn', 
-            'text': f'Error: cant finish operation for user \nid: *{usr.id}*\nname: *{usr.nick}*\nopenstack eror.' 
+            'text': 'Start working:-)' 
             }
-        requests.post(response_url, json=data)
-        return
-
-    usr.serv_id = server_id
-    usr.is_use_server = True
-    rows = await user_controller.update_user_info(db=db, usr=usr)
-    if rows < 0:
-        response_url = r_from['response_url']
-        data = { 
-            'response_type': 'in_thread',
-            'type': 'mrkdwn', 
-            'text': f'Error: cant update info about \nuser id: *{usr.id}*\nname: *{usr.nick}*.' 
-            }
-        requests.post(response_url, json=data)
-        return
-    response_url = r_from['response_url']
-    background_tasks.add_task(server_status_report, server_id, response_url, usr)
-    return
 
 @app.post('/api/v1/command/stop-server')
 async def stop_server_command(req: Request, db: Session = Depends(get_db)):
@@ -266,39 +324,9 @@ async def stop_server_command(req: Request, db: Session = Depends(get_db)):
             'text': f'''Error: user\nid: *{r_from["user_id"]}*,\nname: *{r_from["user_name"]}*\nhave no servers. Use `/create-server` command. \nSee `/usage` command for more info.'''
             }
     
-    # todo: update or stop and delete openstack server
-    if not await openstack_controller.delete_server(server_id=usr.serv_id):
-        response_url = r_from['response_url']
-        data = { 
+    background_tasks.add_task(delete_server, r_from=r_from, usr=usr)
+    return { 
             'response_type': 'in_thread',
             'type': 'mrkdwn', 
-            'text': f'Error: cant delete server \nserver id: *{usr.serv_id}*\nserver ip: *{usr.serv_ip}*.' 
+            'text': 'Start working:-)' 
             }
-        requests.post(response_url, json=data)
-
-    usr.is_use_server = False
-    usr.serv_ip = None
-    usr.serv_id = None
-    rows = await user_controller.update_user_info(db=db, usr=usr)
-    if rows < 0:
-        response_url = r_from['response_url']
-        data = { 
-            'response_type': 'in_thread',
-            'type': 'mrkdwn', 
-            'text': f'Error: cant update info about \nuser id: *{usr.id}*\nname: *{usr.nick}*.' 
-            }
-        requests.post(response_url, json=data)
-        return
-
-    response_url = r_from['response_url']
-    data = { 
-            'response_type': 'in_thread',
-            'type': 'mrkdwn', 
-            'text': 
-f'''Stop and delete server user 
-id: *{usr.id}*
-name: *{usr.nick}*.
-'''
-            }
-    requests.post(response_url, json=data)
-    return
