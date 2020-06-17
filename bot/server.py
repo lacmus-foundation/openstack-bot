@@ -69,8 +69,16 @@ async def create_server(server_params: dict, usr: user.User, r_from: dict, db: S
     }
     requests.post(response_url, json=data)
 
-    while count < 120:
+    while count < 900:
         info = await openstack_controller.get_server_info(server_id=server_id)
+        if count > 30 and count % 60 == 0:
+            data = {
+            'response_type': 'in_thread',
+            'type': 'mrkdwn',
+            'text': f'Creating server status: {info["status"]}.'
+            }
+            requests.post(response_url, json=data)
+
         if info['status'] == 'ACTIVE':
             usr.serv_id = info['id']
             usr.serv_ip = info['ip']
