@@ -15,6 +15,7 @@ services:
       dockerfile: Dockerfile
     container_name: bot
     env_file: ./bot/app.conf
+    network_mode: "host"
     ports:
       - 5000:5000
     depends_on:

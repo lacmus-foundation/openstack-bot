@@ -40,7 +40,7 @@ async def get_server_info(server_id: str):
         conn = openstack.connect()
         server = conn.get_server_by_id(server_id)
         conn.close()
-        return { 'name': server['name'], 'ip': server['accessIPv4'], 'status': server['status'] }
+        return { 'name': server['name'], 'id': server_id, 'ip': server['accessIPv4'], 'status': server['status'] }
     except:
         if conn != None:
             conn.close()
